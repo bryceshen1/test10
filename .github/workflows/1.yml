@@ -1,0 +1,76 @@
+name: Step 1, Create an Issue
+
+on:
+  workflow_dispatch:
+  issues:
+    types:
+      - opened
+
+permissions:
+  contents: write
+
+jobs:
+  get_current_step:
+    name: Check current step number
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Debug Issue Event
+        run: |
+          echo "Triggered by Issue Event"
+          echo "Issue title: ${{ github.event.issue.title }}"
+          echo "Issue body: ${{ github.event.issue.body }}"
+          echo "Repository is template: ${{ github.event.repository.is_template }}"
+
+      - name: Debug step file existence
+        run: |
+          if [ -f ./.github/steps/-step.txt ]; then
+            echo "Step file found."
+            cat ./.github/steps/-step.txt
+          else
+            echo "Step file not found!" && exit 1
+          fi
+
+      - id: get_step
+        run: |
+          current_step=$(cat ./.github/steps/-step.txt | tr -d '[:space:]')
+          echo "current_step=${current_step}" >> $GITHUB_OUTPUT
+
+      - name: Debug current step
+        run: echo "Current step is ${{ steps.get_step.outputs.current_step }}"
+
+    outputs:
+      current_step: ${{ steps.get_step.outputs.current_step }}
+
+  on_issue_opened:
+    name: On issue opened
+    needs: get_current_step
+    if: >-
+      ${{ github.event_name == 'issues' 
+          && !github.event.repository.is_template
+          && needs.get_current_step.outputs.current_step == '1' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: update-game
+
+      - name: Check if update-game branch exists
+        run: |
+          if git ls-remote --heads origin update-game | grep -q "update-game"; then
+            echo "Branch exists."
+          else
+            echo "Branch 'update-game' does not exist!" && exit 1
+          fi
+
+      - name: Update to step 2.1
+        uses: skills/action-update-step@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          from_step: 1
+          to_step: 2.1
+          branch_name: update-game

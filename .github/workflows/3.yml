@@ -1,0 +1,81 @@
+name: Step 3, Assign Issues to teams
+
+
+# This step triggers after an issue is assigned to a team member.
+# This workflow updates from step 3 to step 4.1.
+
+on:
+  workflow_dispatch:
+  issues:
+    types:
+      - assigned
+
+permissions:
+  contents: write  # Needed to update the step metadata
+
+jobs:
+  # Get the current step to only run the main job when the learner is on the same step.
+  get_current_step:
+    name: Check current step number
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Debug step file existence
+        run: |
+          if [ -f ./.github/steps/-step.txt ]; then
+            echo "Step file found."
+            cat ./.github/steps/-step.txt
+          else
+            echo "Step file not found!" && exit 1
+          fi
+
+      - id: get_step
+        run: |
+          current_step=$(cat ./.github/steps/-step.txt | tr -d '[:space:]')
+          echo "current_step=${current_step}" >> $GITHUB_OUTPUT
+
+      - name: Debug current step
+        run: echo "Current step is ${{ steps.get_step.outputs.current_step }}"
+
+    outputs:
+      current_step: ${{ steps.get_step.outputs.current_step }}
+
+  on_issue_assigned:
+    name: On Issue Assigned
+    needs: get_current_step
+
+    # We will only run this action when:
+    # 1. This repository isn't the template repository.
+    # 2. The step is currently 3.
+    if: >-
+      ${{ github.event_name == 'issues' 
+          && !github.event.repository.is_template
+          && needs.get_current_step.outputs.current_step == '3' }}
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: update-game
+
+      - name: Check if update-game branch exists
+        run: |
+          if git ls-remote --heads origin update-game | grep -q "update-game"; then
+            echo "Branch exists."
+          else
+            echo "Branch 'update-game' does not exist!" && exit 1
+          fi
+
+      # In README.md, switch step 3 for step 4.1.
+      - name: Update to step 4.1
+        uses: skills/action-update-step@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          from_step: 3
+          to_step: 4.1
+          branch_name: update-game
